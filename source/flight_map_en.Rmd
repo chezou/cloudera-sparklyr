@@ -1,0 +1,180 @@
+---
+title: "Analyzing US flight map with sparlyr"
+author: "Aki Ariga"
+date: "1/19/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# sparklyr: Use Spark from R like dplyr
+
+In this document, we will show you visualization and buliding predictive model of US flights with sparklyr.
+Flight visualization code is based on this article:
+http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
+
+If you are interested in sparklyr, you can try with [official document](http://spark.rstudio.com/), or you also can try for Spark cluster with [Cloudera Director](https://blog.cloudera.com/blog/2016/12/automating-your-sparklyr-environment-with-cloudera-director/). We built a Spark cluster with Cloudera Director.
+
+This document assume you have tables of:
+
+- [Airlines data](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz) as `airlines_bi_pq`. It is assumed put on S3, but you can put into HDFS. See also [Ibis project](http://www.ibis-project.org/pages/data.html#airlines).
+- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) converted into parquet format as `airports_new_pq`. See also [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
+
+If you will try sparklyr, [the official cheatsheet](http://spark.rstudio.com/images/sparklyr-cheatsheet.pdf) is very helpful.
+
+## Connect to Spark with sparklyr
+
+Let's connect with your Spark cluster with sparklyr.
+
+```{r connect}
+# Load libraries
+library(ggplot2)
+library(maps)
+library(geosphere)
+library(sparklyr)
+library(dplyr)
+
+# Configure cluster
+config <- spark_config()
+config$spark.driver.cores   <- 4
+config$spark.executor.cores <- 4
+config$spark.executor.memory <- "4G"
+#spark_home <- "/opt/cloudera/parcels/CDH/lib/spark"
+#spark_version <- "1.6.2"
+spark_home <- "/opt/cloudera/parcels/SPARK2/lib/spark2"
+spark_version <- "2.0.0"
+sc <- spark_connect(master="yarn-client", version=spark_version, config=config, spark_home=spark_home)
+```
+
+## Read the table from S3 and plot with ggplot
+
+Summarize flight number of `airlines_bi_pq` table by year.
+
+```{r loadtable}
+airlines <- tbl(sc, "airlines_bi_pq")
+airlines
+airline_counts_by_year <- airlines %>% group_by(year) %>% summarise(count=n()) %>% collect
+airline_counts_by_year %>% tbl_df %>% print(n=nrow(.))
+```
+
+sparklyr's table is evaluated lazy, so you should use `collect` to convert into data.frame.
+
+Plot summarized data with ggplot.
+
+```{r plot_year}
+g <- ggplot(airline_counts_by_year, aes(x=year, y=count))
+g <- g + geom_line(
+  colour = "magenta",
+  linetype = 1,
+  size = 0.8
+)
+g <- g + xlab("Year")
+g <- g + ylab("Flight number")
+g <- g + ggtitle("US flights")
+plot(g)
+```
+
+We found the decreacing of flight number in 2002. But why?
+
+## See flight number between 2001 and 2003
+
+Next, let's dig it for the 2002 data. Let's plot flight number betwewen 2001 and 2003.
+
+```{r plot_month}
+airline_counts_by_month <- airlines %>% filter(year>= 2001 & year<=2003) %>% group_by(year, month) %>% summarise(count=n()) %>% collect
+
+g <- ggplot(
+  airline_counts_by_month, 
+  aes(x=as.Date(sprintf("%d-%02d-01", airline_counts_by_month$year, airline_counts_by_month$month)), y=count)
+  )
+g <- g + geom_line(
+  colour = "magenta",
+  linetype = 1,
+  size = 0.8
+)
+g <- g + xlab("Year/Month")
+g <- g + ylab("Flight number")
+g <- g + ggtitle("US flights")
+plot(g)
+```
+
+It is came out that the flight number after Sept. 2001 significantly decreased. We can understand it is the effect of 9/11.
+
+## Summarize flight data by year, carrier, origin and dest
+
+Next, we will summarize the data by carrier, origin and dest.
+
+```{r summarize}
+flights <- airlines %>% group_by(year, carrier, origin, dest) %>% summarise(count=n()) %>% collect
+flights
+airports <- tbl(sc, "airports_new_pq") %>% collect
+```
+
+Now we extract AA's flight in 2007.
+
+```{r filter_aa}
+flights_aa <- flights %>% filter(year==2007) %>% filter(carrier=="AA") %>% arrange(count)
+flights_aa
+```
+
+## Plotting flights into map.
+
+Let's plot the flight number of AA in 2007.
+
+
+```{r drawmap}
+# draw map with line of AA
+xlim <- c(-171.738281, -56.601563)
+ylim <- c(12.039321, 71.856229)
+
+# Color settings
+pal <- colorRampPalette(c("#333333", "white", "#1292db"))
+colors <- pal(100)
+
+map("world", col="#6B6363", fill=TRUE, bg="#000000", lwd=0.05, xlim=xlim, ylim=ylim)
+
+maxcnt <- max(flights_aa$count)
+for (j in 1:length(flights_aa$carrier)) {
+  air1 <- airports[airports$iata == flights_aa[j,]$origin,]
+  air2 <- airports[airports$iata == flights_aa[j,]$dest,]
+  
+  inter <- gcIntermediate(c(air1[1,]$longitude, air1[1,]$latitude), c(air2[1,]$longitude, air2[1,]$latitude), n=100, addStartEnd=TRUE)
+  colindex <- round( (flights_aa[j,]$count / maxcnt) * length(colors) )
+  
+  lines(inter, col=colors[colindex], lwd=0.8)
+}
+```
+
+## Build a predictive model for delay with linear regression
+
+We will build a predictive model with MLlib. We use linear regression of MLlib.
+
+First, we will prepare training data. In order to handle categorical data, you should use `tf_string_indexer` for converting.
+
+```{r prepare_train_data}
+# build predictive model with linear regression
+partitions <- airlines %>%
+  filter(arrdelay >= 5) %>%
+  sdf_mutate(
+       carrier_cat = ft_string_indexer(carrier),
+       origin_cat = ft_string_indexer(origin),
+       dest_cat = ft_string_indexer(dest)
+  ) %>%
+  mutate(hour = floor(dep_time/100)) %>%
+  sdf_partition(training = 0.5, test = 0.5, seed = 1099)
+```
+
+```{r train_model}
+fit <- partitions$training %>%
+   ml_linear_regression(
+     response = "arrdelay",
+     features = c(
+        "month", "hour", "dayofweek", "carrier_cat", "depdelay", "origin_cat", "dest_cat", "distance"
+       )
+    )
+fit
+
+summary(fit)
+```

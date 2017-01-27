@@ -1,0 +1,183 @@
+---
+title: "Analyzing US flight map with sparlyr"
+author: "Aki Ariga"
+date: "1/19/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# RからSparkのデータを処理するsparklyr
+
+今回は、sparklyrを使ってアメリカのフライト情報について、可視化、予測モデルの構築を行います。
+
+地図の可視化はこちらのブログを参考にしました。
+http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
+
+もし、sparklyrに興味をもったなら、[公式ドキュメント](http://spark.rstudio.com/)から始めるといいでしょう。
+もしくは、Cloudera DirectorでSparkクラスターを簡単につくり、それとsparklyrをつなげても良いでしょう。（今回はこれを元にしています）
+[Cloudera Blog](https://blog.cloudera.com/blog/2016/12/automating-your-sparklyr-environment-with-cloudera-director/).
+
+また、sparklyrを使う上で、[チートシート](http://spark.rstudio.com/images/sparklyr-cheatsheet.pdf)が非常に役に立ちます。
+
+このドキュメントでは以下のテーブルを使います:
+
+- [Airlines data](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz) を `airlines_bi_pq` という名前のテーブルで格納しています。S3においてあるデータを使いますが、HDFSにあっても構いません. See also [Ibis project](http://www.ibis-project.org/pages/data.html#airlines).
+- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) を`airports_new_pq`という名前のテーブルにparquet形式で保存しています。 See also [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
+
+## Sparkに接続する
+
+sparklyr を使いApache Sparkに接続する
+
+```{r connect}
+# Load libraries
+library(ggplot2)
+library(maps)
+library(geosphere)
+library(sparklyr)
+library(dplyr)
+
+# Configure cluster
+config <- spark_config()
+config$spark.driver.cores   <- 4
+config$spark.executor.cores <- 4
+config$spark.executor.memory <- "4G"
+#spark_home <- "/opt/cloudera/parcels/CDH/lib/spark"
+#spark_version <- "1.6.2"
+spark_home <- "/opt/cloudera/parcels/SPARK2/lib/spark2"
+spark_version <- "2.0.0"
+sc <- spark_connect(master="yarn-client", version=spark_version, config=config, spark_home=spark_home)
+```
+
+## S3にあるテーブルのデータを読み込みプロットする
+
+まずは、`airlines_bi_pq`というHiveのテーブルにあるフライト数を年毎に集計します。
+元データは、[こちら](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz)からダウンロードできます。
+
+```{r loadtable}
+airlines <- tbl(sc, "airlines_bi_pq")
+airlines
+airline_counts_by_year <- airlines %>% group_by(year) %>% summarise(count=n()) %>% collect
+airline_counts_by_year %>% tbl_df %>% print(n=nrow(.))
+```
+
+これをグラフにプロットしてみましょう。
+
+```{r plot_year}
+g <- ggplot(airline_counts_by_year, aes(x=year, y=count))
+g <- g + geom_line(
+  colour = "magenta",
+  linetype = 1,
+  size = 0.8
+)
+g <- g + xlab("Year")
+g <- g + ylab("Flight number")
+g <- g + ggtitle("US flights")
+plot(g)
+```
+
+## 2001-2003年のフライト数を見てみる
+2002年のフライト数が激減しているのがわかります。では、2001年〜2003年のフライト数を見てみます。
+
+
+```{r plot_month}
+airline_counts_by_month <- airlines %>% filter(year>= 2001 & year<=2003) %>% group_by(year, month) %>% summarise(count=n()) %>% collect
+
+g <- ggplot(
+  airline_counts_by_month, 
+  aes(x=as.Date(sprintf("%d-%02d-01", airline_counts_by_month$year, airline_counts_by_month$month)), y=count)
+  )
+g <- g + geom_line(
+  colour = "magenta",
+  linetype = 1,
+  size = 0.8
+)
+g <- g + xlab("Year/Month")
+g <- g + ylab("Flight number")
+g <- g + ggtitle("US flights")
+plot(g)
+```
+
+2001年の9.11の影響を受けていることがわかります。
+
+## フライトデータを年、キャリア、出発地、到着地で集計する
+
+次に、キャリア・年ごとのフライト数を集計してみます。
+
+```{r summarize}
+flights <- airlines %>% group_by(year, carrier, origin, dest) %>% summarise(count=n()) %>% collect
+flights
+airports <- tbl(sc, "airports_new_pq") %>% collect
+```
+
+その中から、2007年のアメリカン航空のフライト情報抽出します。
+
+```{r filter_aa}
+flights_aa <- flights %>% filter(year==2007) %>% filter(carrier=="AA") %>% arrange(count)
+flights_aa
+```
+
+## アメリカン航空のフライトのマップを出力する
+
+では、2007年のアメリカン航空のフライトを可視化してみましょう。フィルターするデータを変えれば他の航空会社でもplot可能です。
+
+```{r drawmap}
+# draw map with line of AA
+xlim <- c(-171.738281, -56.601563)
+ylim <- c(12.039321, 71.856229)
+
+# Color settings
+#pal <- colorRampPalette(c("#f2f2f2", "red"))
+pal <- colorRampPalette(c("#333333", "white", "#1292db"))
+colors <- pal(100)
+
+#map("world", col="#f2f2f2", fill=TRUE, bg="white", lwd=0.05, xlim=xlim, ylim=ylim)
+map("world", col="#6B6363", fill=TRUE, bg="#000000", lwd=0.05, xlim=xlim, ylim=ylim)
+
+#carriers <- unique(flights$carrier)
+
+maxcnt <- max(flights_aa$count)
+for (j in 1:length(flights_aa$carrier)) {
+  air1 <- airports[airports$iata == flights_aa[j,]$origin,]
+  air2 <- airports[airports$iata == flights_aa[j,]$dest,]
+  
+  inter <- gcIntermediate(c(air1[1,]$longitude, air1[1,]$latitude), c(air2[1,]$longitude, air2[1,]$latitude), n=100, addStartEnd=TRUE)
+  colindex <- round( (flights_aa[j,]$count / maxcnt) * length(colors) )
+  
+  lines(inter, col=colors[colindex], lwd=0.8)
+}
+```
+
+## 遅延時間を予測する線形回帰モデルを学習する
+
+最後に、MLlibの線形回帰モデルを使い、遅延を予測するモデルを構築してみましょう。
+
+なお、sparklyrでカテゴリカルモデルを扱う際には、`ft_string_indexer`を使い変換しておきます。
+
+```{r prepare_train_data}
+# build predictive model with linear regression
+partitions <- airlines %>%
+  filter(arrdelay >= 5) %>%
+  sdf_mutate(
+       carrier_cat = ft_string_indexer(carrier),
+       origin_cat = ft_string_indexer(origin),
+       dest_cat = ft_string_indexer(dest)
+  ) %>%
+  mutate(hour = floor(dep_time/100)) %>%
+  sdf_partition(training = 0.5, test = 0.5, seed = 1099)
+```
+
+```{r train_model}
+fit <- partitions$training %>%
+   ml_linear_regression(
+     response = "arrdelay",
+     features = c(
+        "month", "hour", "dayofweek", "carrier_cat", "depdelay", "origin_cat", "dest_cat", "distance"
+       )
+    )
+fit
+
+summary(fit)
+```
