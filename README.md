@@ -20,4 +20,8 @@ This demo is for [Big Data Analytics Tokyo](http://www.bigdatacon.jp/en/talk/a-d
 
 It visualizes US air flights and builds a linear regression model for delay prediction.
 
+- Rmarkdown
+  - [Japanese](sources/flight_map.Rmd)
+  - [English](sources/flight_map_en.Rmd)
+
 You can also see it in [RPubs](https://rpubs.com/chezou/usflights-en) ([Japanese version](https://rpubs.com/chezou/usflights)).
