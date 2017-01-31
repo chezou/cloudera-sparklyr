@@ -14,6 +14,14 @@ you can set `scripts/bootstrap.sh` for bootstrapScript of every template.
 
 Then, login the gateway node and run `scripts/post_crete_script_on_gateway.sh`.
 
+### conf file for Cloudera Director client
+
+[cluster.conf](https://github.com/chezou/cloudera-sparklyr/blob/master/cluster.conf) requires Director 2.3+.
+
+It is assumed to run on Tokyo region. You should replace several configurations.
+
+If you don't have installed Director client, you can use [Docker based tool for Cloudera Director client](https://github.com/tsuyo/cloudera-boot).
+
 ## Demo: Analyzing US flights
 
 This demo is for [Big Data Analytics Tokyo](http://www.bigdatacon.jp/en/talk/a-data-engineering-and-data-science-platform-based-on-hadoopspark/).
