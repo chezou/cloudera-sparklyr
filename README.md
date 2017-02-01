@@ -33,3 +33,9 @@ It visualizes US air flights and builds a linear regression model for delay pred
   - [English](sources/flight_map_en.Rmd)
 
 You can also see it in [RPubs](https://rpubs.com/chezou/usflights-en) ([Japanese version](https://rpubs.com/chezou/usflights)).
+
+### Loading external table on s3
+
+Added `scripts/create_external_table.sql`.
+Before run the query, you should upload [airlines_parquet](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz) and [airpots data](http://stat-computing.org/dataexpo/2009/airports.csv) on S3.
+Before creating table, you should replace bucket name.
