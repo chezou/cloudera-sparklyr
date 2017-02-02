@@ -1,5 +1,5 @@
 ---
-title: "Analyzing US flight map with sparlyr"
+title: "Analyzing US flight map with sparklyr"
 author: "Aki Ariga"
 date: "1/19/2017"
 output: html_document
@@ -11,22 +11,25 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # sparklyr: Use Spark from R like dplyr
 
-In this document, we will show you visualization and buliding predictive model of US flights with sparklyr.
-Flight visualization code is based on this article:
+In this document, we will show you a visualization and build a predictive model of US flights with sparklyr. Flight visualization code is based on this article: 
 http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
 
 If you are interested in sparklyr, you can try with [official document](http://spark.rstudio.com/), or you also can try for Spark cluster with [Cloudera Director](https://blog.cloudera.com/blog/2016/12/automating-your-sparklyr-environment-with-cloudera-director/). We built a Spark cluster with Cloudera Director.
 
-This document assume you have tables of:
+This document assumes you already have the following tables:
 
-- [Airlines data](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz) as `airlines_bi_pq`. It is assumed put on S3, but you can put into HDFS. See also [Ibis project](http://www.ibis-project.org/pages/data.html#airlines).
-- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) converted into parquet format as `airports_new_pq`. See also [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
+- [Airlines data](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz) as `airlines_bi_pq`.  It is assumed to be on S3, but you can put it into HDFS. See also [Ibis project](http://www.ibis-project.org/pages/data.html#airlines).
+- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) converted into Parquet format as `airports_new_pq`. See also [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
+
+You should make these tables available through Apache Hive or Apache Impala (incubating) with Hue.
+After installation of  sparklyr and instantiation of the Spark cluster with Cloudera Director configuration file, you can access the RStudio server on `<sparklyr-gateway-hostname>:8787` with your browser and log in with rsuser/cloudera.
 
 If you will try sparklyr, [the official cheatsheet](http://spark.rstudio.com/images/sparklyr-cheatsheet.pdf) is very helpful.
 
 ## Connect to Spark with sparklyr
 
-Let's connect with your Spark cluster with sparklyr.
+Let’s connect to your Spark cluster with sparklyr. In this post, we [installed Spark 2.0 additionally](http://www.cloudera.com/documentation/spark2/latest/topics/spark2_installing.html). 
+Before running the following code, you should install additional R packages as `install.packages(c("ggplot2", "maps", "geosphere", "dplyr"))` .
 
 ```{r connect}
 # Load libraries
@@ -59,9 +62,9 @@ airline_counts_by_year <- airlines %>% group_by(year) %>% summarise(count=n()) %
 airline_counts_by_year %>% tbl_df %>% print(n=nrow(.))
 ```
 
-sparklyr's table is evaluated lazy, so you should use `collect` to convert into data.frame.
+sparklyr's table is evaluated lazily, so you should use `collect` to convert into a data.frame.
 
-Plot summarized data with ggplot.
+Plot summarized data with ggplot:
 
 ```{r plot_year}
 g <- ggplot(airline_counts_by_year, aes(x=year, y=count))
@@ -100,11 +103,11 @@ g <- g + ggtitle("US flights")
 plot(g)
 ```
 
-It is came out that the flight number after Sept. 2001 significantly decreased. We can understand it is the effect of 9/11.
+It appears that the number of flights after Sept. 2001 significantly decreased. We can understand it is the effect of 9/11. In this way, sparklyr makes exploratory data analysis easier for large-scale data, so we can obtain new insight quickly.
 
 ## Summarize flight data by year, carrier, origin and dest
 
-Next, we will summarize the data by carrier, origin and dest.
+Next, we will summarize the data by carrier, origin and destination.
 
 ```{r summarize}
 flights <- airlines %>% group_by(year, carrier, origin, dest) %>% summarise(count=n()) %>% collect
@@ -121,7 +124,7 @@ flights_aa
 
 ## Plotting flights into map.
 
-Let's plot the flight number of AA in 2007.
+Let’s plot the flight number of AA in 2007 on a map. You can change the condition of a filter to plot other airlines.
 
 
 ```{r drawmap}
@@ -149,9 +152,9 @@ for (j in 1:length(flights_aa$carrier)) {
 
 ## Build a predictive model for delay with linear regression
 
-We will build a predictive model with MLlib. We use linear regression of MLlib.
+We will build a predictive model with Spark MLlib. We use linear regression from MLlib.
 
-First, we will prepare training data. In order to handle categorical data, you should use `tf_string_indexer` for converting.
+First, we will prepare training data. In order to handle categorical data, you should use [`ft_string_indexer`](http://spark.rstudio.com/reference/sparklyr/latest/ft_string_indexer.html) for converting.
 
 ```{r prepare_train_data}
 # build predictive model with linear regression
@@ -178,3 +181,11 @@ fit
 
 summary(fit)
 ```
+
+Now, we can see the trained linear regression model and its coefficients.
+
+# Summary
+
+Using sparklyr enables you to analyze big data on Amazon S3 with R smoothly. You can build a Spark cluster easily with Cloudera Director. sparklyr makes Spark as a backend database of dplyr. You can create tidy data from huge messy data, plot complex maps from this big data the same way as small data, and build a predictive model from big data with MLlib. I believe sparklyr helps all R users perform exploratory data analysis faster and easier on large-scale data. Let’s try!
+
+Learn more about sparklyr and Cloudera in this [on-demand video](http://www.cloudera.com/content/dam/www/marketing/resources/webinars/analyzing-hadoop-data-using-sparklyr-recorded-webinar.png.landing.html). 

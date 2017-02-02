@@ -1,5 +1,5 @@
 ---
-title: "Analyzing US flight map with sparlyr"
+title: "Analyzing US flight map with sparklyr"
 author: "Aki Ariga"
 date: "1/19/2017"
 output: html_document
@@ -24,12 +24,17 @@ http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
 
 このドキュメントでは以下のテーブルを使います:
 
-- [Airlines data](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz) を `airlines_bi_pq` という名前のテーブルで格納しています。S3においてあるデータを使いますが、HDFSにあっても構いません. See also [Ibis project](http://www.ibis-project.org/pages/data.html#airlines).
-- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) を`airports_new_pq`という名前のテーブルにparquet形式で保存しています。 See also [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
+- [Airlines data](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz) を `airlines_bi_pq` という名前のテーブルで格納しています。S3においてあるデータを使いますが、HDFSにあっても構いません。こちらもご覧ください [Ibis project](http://www.ibis-project.org/pages/data.html#airlines).
+- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) を`airports_new_pq`という名前のテーブルにparquet形式で保存しています。 こちらもご覧ください [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
+
+これらのテーブルはHueなどを使って、別途作成しておいてください。テーブル作成のためのSQLは[こちら](https://github.com/chezou/cloudera-sparklyr#loading-external-table-on-s3)を参考にしてください。
+
+まず、先程立ち上げたクラスタのゲートウェイサーバにRStudio Serverが入っています。ポートが開放されている場合は、`<gateway-server-host>:8787`でブラウザからアクセスできます。
+お手持ちのブラウザで`<gateway-server-host>:8787`を開いてください。そうでなければ8787番のポートをsshなどでフォワードし、`localhost:8787`にアクセスします。ブラウザからRStudio Serverにアクセスできます。スクリプトの設定だと、ユーザ名`rsuser`パスワード`cloudera`でRStudioにログインできます。
 
 ## Sparkに接続する
 
-sparklyr を使いApache Sparkに接続する
+sparklyr を使いApache Sparkクラスタに接続します。今回のコードは別途入れておいたSpark 2.0を使っています。
 
 ```{r connect}
 # Load libraries
@@ -79,8 +84,7 @@ plot(g)
 ```
 
 ## 2001-2003年のフライト数を見てみる
-2002年のフライト数が激減しているのがわかります。では、2001年〜2003年のフライト数を見てみます。
-
+2002年のフライト数が激減しているのがわかります。何が起こったのでしょうか？2001年〜2003年のフライト数を見てみましょう。
 
 ```{r plot_month}
 airline_counts_by_month <- airlines %>% filter(year>= 2001 & year<=2003) %>% group_by(year, month) %>% summarise(count=n()) %>% collect
@@ -100,7 +104,7 @@ g <- g + ggtitle("US flights")
 plot(g)
 ```
 
-2001年の9.11の影響を受けていることがわかります。
+2001年の9月以降、フライト数が激減しているのがグラフから読み取れます。これは、[9.11](https://ja.wikipedia.org/wiki/%E3%82%A2%E3%83%A1%E3%83%AA%E3%82%AB%E5%90%8C%E6%99%82%E5%A4%9A%E7%99%BA%E3%83%86%E3%83%AD%E4%BA%8B%E4%BB%B6)の影響を受けて以降2002年の間、フライト数が減少していると考えられます。この記事ではこれ以上原因については深く追求はしませんが、このように探索的な分析を行うことで、普段と異なるデータの傾向から、何が起こったのかを紐解くことができます。
 
 ## フライトデータを年、キャリア、出発地、到着地で集計する
 
@@ -121,7 +125,7 @@ flights_aa
 
 ## アメリカン航空のフライトのマップを出力する
 
-では、2007年のアメリカン航空のフライトを可視化してみましょう。フィルターするデータを変えれば他の航空会社でもplot可能です。
+では、2007年のアメリカン航空のフライトを地図上に可視化してみましょう。フィルターするデータを変えれば他の航空会社でもプロット可能です。
 
 ```{r drawmap}
 # draw map with line of AA
@@ -154,7 +158,7 @@ for (j in 1:length(flights_aa$carrier)) {
 
 最後に、MLlibの線形回帰モデルを使い、遅延を予測するモデルを構築してみましょう。
 
-なお、sparklyrでカテゴリカルモデルを扱う際には、`ft_string_indexer`を使い変換しておきます。
+なお、sparklyrでカテゴリカルモデルを扱う際には、`ft_string_indexer`を使い変換しておきます。これを用いることで、文字列のデータをインデックスに変換します。
 
 ```{r prepare_train_data}
 # build predictive model with linear regression
@@ -181,3 +185,8 @@ fit
 
 summary(fit)
 ```
+
+このように、線形回帰モデルが学習され、どの特徴量がどういった係数か、ということがわかります。
+
+# まとめ
+この記事では、sparklyrを使ってAmazon S3にあるアメリカの航空データの可視化、および予測モデルの構築を行いました。sparklyrを使うことでRに馴染み深い方にはいつもと同じ感覚でS3のデータに対して分析を行うことができます。また、Cloudera Directorを使うことで簡単にSparkクラスタを構築することができるので、是非試してみてください。
