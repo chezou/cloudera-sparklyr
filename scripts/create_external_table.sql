@@ -34,36 +34,27 @@ LOCATION 's3a://<YOUR-BUCKET-NAME>/data/refined/www.ibis-project.org/airlines_bi
 TBLPROPERTIES ('numFiles'='0', 'COLUMN_STATS_ACCURATE'='true', 'transient_lastDdlTime'='1484553764', 'numRows'='123534969', 'totalSize'='0', 'rawDataSize'='-1')
 
 CREATE EXTERNAL TABLE airports (
-	id BIGINT,
-	name STRING,
-	city STRING,
-	country STRING,
-	iata STRING,
-	icao STRING,
-	latitude DOUBLE,
-	longitude DOUBLE,
-	altitude STRING,
-	timezone STRING,
-	dst STRING,
-	tz_database STRING
+  iata STRING,
+  name STRING,
+  city STRING,
+  state STRING,
+  country STRING,
+  latitude DOUBLE,
+  longitude DOUBLE
 )
 ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
 STORED AS TEXTFILE
 LOCATION 's3a://<YOUR-BUCKET-NAME>/data/raw/openflights.org/airports'
+tblproperties("skip.header.line.count"="1");
 
 -- If you have Parquet format file, you can use following query.
 --CREATE EXTERNAL TABLE airports_pq (
---	id BIGINT,
---	name STRING,
---	city STRING,
---	country STRING,
---	iata STRING,
---	icao STRING,
---	latitude DOUBLE,
---	longitude DOUBLE,
---	altitude STRING,
---	timezone STRING,
---	dst STRING,
---	tz_database STRING
+--  iata STRING,
+--  name STRING,
+--  city STRING,
+--  state STRING,
+--  country STRING,
+--  latitude DOUBLE,
+--  longitude DOUBLE
 --) STORED AS PARQUET LOCATION 's3a://<YOUR-BUCKET-NAME>/data/refined/openflights.org/airports_new_pq'
 --TBLPROPERTIES ('transient_lastDdlTime'='1485426798')
