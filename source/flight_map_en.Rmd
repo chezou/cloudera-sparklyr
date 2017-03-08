@@ -19,7 +19,7 @@ If you are interested in sparklyr, you can try with [official document](http://s
 This document assumes you already have the following tables:
 
 - [Airlines data](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz) as `airlines_bi_pq`.  It is assumed to be on S3, but you can put it into HDFS. See also [Ibis project](http://www.ibis-project.org/pages/data.html#airlines).
-- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) converted into Parquet format as `airports_new_pq`. See also [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
+- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) converted into Parquet format as `airports_pq`. See also [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
 
 You should make these tables available through Apache Hive or Apache Impala (incubating) with Hue.
 After installation of  sparklyr and instantiation of the Spark cluster with Cloudera Director configuration file, you can access the RStudio server on `<sparklyr-gateway-hostname>:8787` with your browser and log in with rsuser/cloudera.
@@ -112,7 +112,7 @@ Next, we will summarize the data by carrier, origin and destination.
 ```{r summarize}
 flights <- airlines %>% group_by(year, carrier, origin, dest) %>% summarise(count=n()) %>% collect
 flights
-airports <- tbl(sc, "airports_new_pq") %>% collect
+airports <- tbl(sc, "airports_pq") %>% collect
 ```
 
 Now we extract AA's flight in 2007.

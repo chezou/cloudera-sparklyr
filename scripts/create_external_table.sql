@@ -30,8 +30,8 @@ CREATE EXTERNAL TABLE airlines_bi_pq (
   late_aircraft_delay INT,
   date_yyyymm STRING
 ) STORED AS PARQUET
-LOCATION 's3a://<YOUR-BUCKET-NAME>/data/refined/www.ibis-project.org/airlines_bi_pq'
-TBLPROPERTIES ('numFiles'='0', 'COLUMN_STATS_ACCURATE'='true', 'transient_lastDdlTime'='1484553764', 'numRows'='123534969', 'totalSize'='0', 'rawDataSize'='-1')
+LOCATION "s3a://<YOUR-BUCKET-NAME>/data/refined/www.ibis-project.org/airlines_bi_pq"
+TBLPROPERTIES ("numFiles"="0", "COLUMN_STATS_ACCURATE"="true", "transient_lastDdlTime"="1484553764", "numRows"="123534969", "totalSize"="0", "rawDataSize"="-1");
 
 CREATE EXTERNAL TABLE airports (
   iata STRING,
@@ -42,9 +42,9 @@ CREATE EXTERNAL TABLE airports (
   latitude DOUBLE,
   longitude DOUBLE
 )
-ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+ROW FORMAT SERDE "org.apache.hadoop.hive.serde2.OpenCSVSerde"
 STORED AS TEXTFILE
-LOCATION 's3a://<YOUR-BUCKET-NAME>/data/raw/openflights.org/airports'
+LOCATION "s3a://<YOUR-BUCKET-NAME>/data/raw/openflights.org/airports"
 tblproperties("skip.header.line.count"="1");
 
 -- If you have Parquet format file, you can use following query.
@@ -56,5 +56,5 @@ tblproperties("skip.header.line.count"="1");
 --  country STRING,
 --  latitude DOUBLE,
 --  longitude DOUBLE
---) STORED AS PARQUET LOCATION 's3a://<YOUR-BUCKET-NAME>/data/refined/openflights.org/airports_new_pq'
---TBLPROPERTIES ('transient_lastDdlTime'='1485426798')
+--) STORED AS PARQUET LOCATION "s3a://<YOUR-BUCKET-NAME>/data/refined/openflights.org/airports_pq"
+--TBLPROPERTIES ("transient_lastDdlTime"="1485426798");

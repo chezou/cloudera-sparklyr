@@ -25,7 +25,7 @@ http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
 このドキュメントでは以下のテーブルを使います:
 
 - [Airlines data](https://ibis-resources.s3.amazonaws.com/data/airlines/airlines_parquet.tar.gz) を `airlines_bi_pq` という名前のテーブルで格納しています。S3においてあるデータを使いますが、HDFSにあっても構いません。こちらもご覧ください [Ibis project](http://www.ibis-project.org/pages/data.html#airlines).
-- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) を`airports_new_pq`という名前のテーブルにparquet形式で保存しています。 こちらもご覧ください [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
+- [Airports data](http://stat-computing.org/dataexpo/2009/airports.csv) を`airports_pq`という名前のテーブルにparquet形式で保存しています。 こちらもご覧ください [2009 ASA Data Expo](http://stat-computing.org/dataexpo/2009/supplemental-data.html).
 
 これらのテーブルはHueなどを使って、別途作成しておいてください。テーブル作成のためのSQLは[こちら](https://github.com/chezou/cloudera-sparklyr#loading-external-table-on-s3)を参考にしてください。
 
@@ -113,7 +113,7 @@ plot(g)
 ```{r summarize}
 flights <- airlines %>% group_by(year, carrier, origin, dest) %>% summarise(count=n()) %>% collect
 flights
-airports <- tbl(sc, "airports_new_pq") %>% collect
+airports <- tbl(sc, "airports_pq") %>% collect
 ```
 
 その中から、2007年のアメリカン航空のフライト情報抽出します。
